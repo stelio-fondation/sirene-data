@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Référentiel National des Structures — Agentic ETL Stack</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<style>
+  *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0b1120;color:#e2e8f0;min-height:100vh;display:flex;flex-direction:column}
+  ::selection{background:#3b82f6;color:#fff}
+
+  header{background:linear-gradient(180deg,#0f172a 0%,#0b1120 100%);border-bottom:1px solid #1e293b;padding:28px 36px 20px;position:sticky;top:0;z-index:100;backdrop-filter:blur(12px)}
+  header h1{font-size:1.7rem;font-weight:700;letter-spacing:-0.02em;display:flex;align-items:center;gap:12px}
+  header h1 .gradient{background:linear-gradient(135deg,#60a5fa,#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+  header .subtitle{color:#64748b;font-size:0.9rem;margin-top:6px;display:flex;align-items:center;gap:16px}
+  header .subtitle .live-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:#22c55e;box-shadow:0 0 8px rgba(34,197,94,.5);animation:pulse 2s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+  main{padding:32px 36px;max-width:1400px;margin:0 auto;width:100%}
+
+  /* Architecture Pyramid */
+  .arch-section{margin-bottom:40px}
+  .arch-section h2{font-size:1.15rem;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;margin-bottom:20px}
+  .pyramid{display:flex;flex-direction:column;align-items:center;gap:0}
+  .pyramid-layer{border-radius:12px;border:1px solid #1e293b;padding:20px 28px;text-align:center;transition:all .3s;cursor:pointer;position:relative}
+  .pyramid-layer:hover{border-color:#334155;box-shadow:0 0 30px rgba(59,130,246,.08)}
+  .pyramid-layer .icon{font-size:2rem;margin-bottom:6px}
+  .pyramid-layer .name{font-weight:700;font-size:1.05rem;margin-bottom:2px}
+  .pyramid-layer .count{font-size:1.8rem;font-weight:800;letter-spacing:-.02em}
+  .pyramid-layer .detail{font-size:.78rem;color:#64748b;margin-top:2px}
+  .pyramid-layer.top{background:linear-gradient(180deg,#1a1a3e,#0f172a);border-color:#3b82f6;width:420px}
+  .pyramid-layer.top .count{color:#60a5fa}
+  .pyramid-layer.mid{background:linear-gradient(180deg,#1a2a1a,#0f172a);border-color:#22c55e;width:540px}
+  .pyramid-layer.mid .count{color:#4ade80}
+  .pyramid-layer.base{background:linear-gradient(180deg,#1a2e4a,#0f172a);border-color:#8b5cf6;width:660px}
+  .pyramid-layer.base .count{color:#a78bfa}
+  .pyramid-connector{display:flex;align-items:center;justify-content:center;gap:8px;padding:4px 0;color:#334155;font-size:.75rem}
+  .pyramid-connector .line{width:2px;height:24px;background:linear-gradient(180deg,#334155,#1e293b)}
+
+  /* Cross-reference */
+  .cross-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-bottom:32px}
+  .cross-card{background:#0f172a;border:1px solid #1e293b;border-radius:10px;padding:18px 20px;transition:border-color .2s}
+  .cross-card:hover{border-color:#334155}
+  .cross-card .title{font-size:.78rem;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px}
+  .cross-card .value{font-size:1.5rem;font-weight:700;color:#e2e8f0}
+  .cross-card .sub{font-size:.78rem;color:#475569;margin-top:4px}
+
+  /* Timeline */
+  .timeline{display:flex;flex-wrap:wrap;gap:0;align-items:center;justify-content:center;padding:16px 0;margin-bottom:24px}
+  .timeline-step{display:flex;align-items:center;gap:12px;background:#0f172a;border:1px solid #1e293b;border-radius:10px;padding:12px 18px;transition:border-color .2s}
+  .timeline-step:hover{border-color:#334155}
+  .timeline-step .step-icon{font-size:1.4rem}
+  .timeline-step .step-label{font-size:.82rem;font-weight:600;color:#f1f5f9}
+  .timeline-step .step-badge{padding:1px 7px;border-radius:4px;font-size:.65rem;font-weight:600}
+  .timeline-step .step-badge.s{background:#1e3a5f;color:#93c5fd}
+  .timeline-step .step-badge.f{background:#1a2e1a;color:#6ee7b7}
+  .timeline-step .step-badge.a{background:#2a1e3a;color:#c084fc}
+  .timeline-arrow{color:#334155;font-size:1.2rem;margin:0 2px}
+
+  /* Expandable sections */
+  .layer-section{margin-bottom:24px;border:1px solid #1e293b;border-radius:16px;overflow:hidden;background:#0f172a}
+  .layer-section summary{list-style:none;cursor:pointer;padding:22px 28px;display:flex;align-items:center;gap:16px;transition:background .2s}
+  .layer-section summary::-webkit-details-marker{display:none}
+  .layer-section summary:hover{background:#1a1a2e}
+  .layer-section summary .layer-icon{font-size:1.6rem}
+  .layer-section summary .layer-name{font-size:1.1rem;font-weight:700;color:#f1f5f9}
+  .layer-section summary .layer-stats{display:flex;gap:16px;margin-left:auto}
+  .layer-section summary .layer-stat{text-align:center}
+  .layer-section summary .layer-stat .v{font-weight:700;font-size:1.1rem}
+  .layer-section summary .layer-stat .l{font-size:.65rem;color:#64748b;text-transform:uppercase}
+  .layer-section summary .chevron{color:#475569;font-size:1.2rem;transition:transform .2s}
+  .layer-section[open] summary .chevron{transform:rotate(90deg)}
+  .layer-section .body{padding:0 28px 28px}
+  .layer-section .body .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(480px,1fr));gap:20px}
+
+  /* Cards */
+  .card{background:#0b1120;border-radius:12px;border:1px solid #1e293b;padding:22px}
+  .card h3{font-size:.95rem;font-weight:600;color:#f1f5f9;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+  .card p{color:#64748b;font-size:.84rem;line-height:1.6;margin-bottom:10px}
+  .card .tags{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+  .card .tags span{padding:2px 8px;border-radius:5px;font-size:.7rem;font-weight:500}
+  .card .tags span.k{background:#1e3a5f;color:#93c5fd}
+  .card .tags span.c{background:#1a2e1a;color:#6ee7b7}
+  .card .tags span.p{background:#2a1e3a;color:#c084fc}
+  .card .tags span.m{background:#3a2e1a;color:#fbbf24}
+  .mermaid-box{background:#060b16;border-radius:10px;padding:18px;overflow-x:auto}
+
+  /* Dashboard link button */
+  .dash-btn{display:inline-flex;align-items:center;gap:8px;background:linear-gradient(135deg,#1e3a5f,#1a2e4a);border:1px solid #3b82f6;border-radius:10px;padding:10px 20px;color:#60a5fa;text-decoration:none;font-weight:600;font-size:.85rem;transition:all .25s}
+  .dash-btn:hover{background:#1e3a5f;border-color:#60a5fa;box-shadow:0 0 16px rgba(59,130,246,.15)}
+
+  /* Data rows */
+  .data-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-top:12px}
+  .data-item{background:#0f172a;border:1px solid #1e293b;border-radius:8px;padding:12px 14px;display:flex;justify-content:space-between;align-items:center}
+  .data-item .dl{color:#64748b;font-size:.78rem}
+  .data-item .dv{color:#e2e8f0;font-weight:600;font-size:.85rem}
+
+  /* Phase labels */
+  .phase{display:inline-flex;align-items:center;gap:5px;font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;padding:3px 10px;border-radius:5px;margin-bottom:8px}
+  .phase.p1{background:#2a1e3a;color:#c084fc}
+  .phase.p2{background:#1a2e1a;color:#6ee7b7}
+  .phase.p3{background:#3a2e1a;color:#fbbf24}
+
+  footer{margin-top:auto;padding:18px 36px;border-top:1px solid #1e293b;color:#334155;font-size:.78rem;text-align:center}
+  footer a{color:#475569;text-decoration:none}
+  footer a:hover{color:#64748b}
+
+  @media(max-width:768px){
+    header{padding:16px 16px 12px}
+    main{padding:20px 16px}
+    .pyramid-layer{width:100%!important}
+    .timeline{flex-direction:column;gap:8px}
+    .timeline-arrow{transform:rotate(90deg)}
+    .card .body .grid{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1><span class="gradient">🏗️ Référentiel National des Structures</span></h1>
+  <p class="subtitle">
+    <span class="live-dot"></span> Données en direct de PostgreSQL 16
+    <span style="color:#334155">·</span> 5 couches · 59.5M enregistrements · Metabase · KNIME
+    <span style="margin-left:16px">|</span>
+    <a href="/cartes" style="color:#60a5fa;text-decoration:none;font-size:.85rem">🗺️ Cartes interactives</a>
+  </p>
+</header>
+
+<main>
+
+<!-- ═══════════════════ ARCHITECTURE EN PYRAMIDE ═══════════════════ -->
+<section class="arch-section">
+  <h2>📐 Architecture — Staging 4 couches</h2>
+
+  <div class="pyramid">
+    <div class="pyramid-layer" style="background:linear-gradient(180deg,#2a1a0a,#0f172a);border-color:#f59e0b;width:360px">
+      <div class="icon">📋</div>
+      <div class="name">Couche 4 — Nomenclatures</div>
+      <div class="count" style="color:#fbbf24">122</div>
+      <div class="detail">codes de référence (secteurs santé + catégories services)</div>
+    </div>
+    <div class="pyramid-connector">
+      <span class="line"></span>
+      <span style="font-size:.7rem;color:#475569">qualifie</span>
+      <span class="line"></span>
+    </div>
+    <div class="pyramid-layer top">
+      <div class="icon">🎯</div>
+      <div class="name">Couche 3 — Annuaire Santé</div>
+      <div class="count" id="py-an">—</div>
+      <div class="detail">professionnels de santé géolocalisés · 5 tables · ~1.8 Go</div>
+    </div>
+    <div class="pyramid-connector">
+      <span class="line"></span>
+      <span style="font-size:.7rem;color:#475569">enrichi par</span>
+      <span class="line"></span>
+    </div>
+    <div class="pyramid-layer mid">
+      <div class="icon">🏛️</div>
+      <div class="name">Couche 2 — France Services</div>
+      <div class="count" id="py-fs">—</div>
+      <div class="detail">structures d'accueil labellisées · 33 colonnes</div>
+    </div>
+    <div class="pyramid-connector">
+      <span class="line"></span>
+      <span style="font-size:.7rem;color:#475569">repose sur</span>
+      <span class="line"></span>
+    </div>
+    <div class="pyramid-layer base">
+      <div class="icon">🏢</div>
+      <div class="name">Couche 1 — SIRENE (1.1 UL + 1.2 Etab)</div>
+      <div class="count"><span id="py-su">—</span> <span style="font-size:.6em;opacity:.5">+</span> <span id="py-etab" style="font-size:.7em">—</span></div>
+      <div class="detail">unités légales + établissements géolocalisés · <span id="py-size">—</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════ CROISEMENTS ═══════════════════ -->
+<section class="arch-section">
+  <h2>🔗 Correspondances entre couches</h2>
+  <div class="cross-grid">
+    <div class="cross-card">
+      <div class="title">FS → SIRENE (SIREN)</div>
+      <div class="value" id="x-fs-su">—</div>
+      <div class="sub">structures France Services avec unité légale SIRENE</div>
+    </div>
+    <div class="cross-card">
+      <div class="title">Santé → SIRENE (SIREN)</div>
+      <div class="value" id="x-an-su">—</div>
+      <div class="sub">professionnels avec SIREN dans la base SIRENE</div>
+    </div>
+    <div class="cross-card">
+      <div class="title">Départements communs FS ∩ Santé</div>
+      <div class="value" id="x-depts">—</div>
+      <div class="sub">départements couverts par les deux couches</div>
+    </div>
+    <div class="cross-card">
+      <div class="title">Couverture totale</div>
+      <div class="value">62.8M</div>
+      <div class="sub">enregistrements cumulés sur les 3 couches</div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════ TIMELINE PIPELINE ═══════════════════ -->
+<section class="arch-section">
+  <h2>⚙️ Pipeline de staging — Flux de données</h2>
+  <div class="timeline">
+    <div class="timeline-step">
+      <span class="step-icon">📥</span>
+      <span class="step-label">Extraction</span>
+      <span class="step-badge s">S</span><span class="step-badge f">F</span><span class="step-badge a">A</span>
+    </div>
+    <span class="timeline-arrow">→</span>
+    <div class="timeline-step">
+      <span class="step-icon">🧹</span>
+      <span class="step-label">Nettoyage</span>
+      <span class="step-badge s">S</span><span class="step-badge f">F</span><span class="step-badge a">A</span>
+    </div>
+    <span class="timeline-arrow">→</span>
+    <div class="timeline-step">
+      <span class="step-icon">📋</span>
+      <span class="step-label">COPY PostgreSQL</span>
+      <span class="step-badge s">S</span><span class="step-badge f">F</span><span class="step-badge a">A</span>
+    </div>
+    <span class="timeline-arrow">→</span>
+    <div class="timeline-step">
+      <span class="step-icon">🔍</span>
+      <span class="step-label">Indexation</span>
+      <span class="step-badge s">S</span><span class="step-badge f">F</span><span class="step-badge a">A</span>
+    </div>
+    <span class="timeline-arrow">→</span>
+    <div class="timeline-step">
+      <span class="step-icon">📊</span>
+      <span class="step-label">Dashboard Metabase</span>
+      <span class="step-badge s">S</span><span class="step-badge f">F</span><span class="step-badge a">A</span>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════ DIAGRAMME GLOBAL ═══════════════════ -->
+<section class="arch-section">
+  <h2>🗺️ Diagramme d'architecture global</h2>
+  <div class="card" style="padding:24px">
+    <div class="mermaid-box">
+      <div class="mermaid">
+flowchart TB
+    subgraph SOURCES["📥 Sources"]
+        A1["INSEE SIRENE<br/><small>CSV 3.4 Go</small>"]
+        A2["data.gouv.fr<br/><small>France Services XLSX</small>"]
+        A3["RPPS / Annuaire Santé<br/><small>5 fichiers pipe-delimited</small>"]
+    end
+
+    subgraph STAGING["⚡ Staging PostgreSQL"]
+        B1[("🐘 etl.stock_unite_legale<br/><small>25.6M / socle</small>")]
+        B2[("🐘 etl.france_services<br/><small>164K / couche 2</small>")]
+        B3[("🐘 etl.annuaire_*<br/><small>5 tables / couche 3</small>")]
+    end
+
+    subgraph ANALYSE["📊 Analyse & Diffusion"]
+        C1["📈 Dashboard SIRENE<br/><small>metabase/dashboard/1</small>"]
+        C2["📈 Dashboard France Services<br/><small>metabase/dashboard/2</small>"]
+        C3["📈 Dashboard Annuaire Santé<br/><small>metabase/dashboard/3</small>"]
+        D["🌐 Workflows Dashboard<br/><small>workflows.hermes.stelio-ia.fr</small>"]
+    end
+
+    A1 -->|"COPY STDIN"| B1
+    A2 -->|"COPY STDIN"| B2
+    A3 -->|"COPY STDIN ×5"| B3
+    B1 --> C1
+    B2 --> C2
+    B3 --> C3
+    C1 --> D
+    C2 --> D
+    C3 --> D
+
+    style SOURCES fill:#1a1530,stroke:#7c3aed,color:#c084fc
+    style STAGING fill:#0d2b1a,stroke:#10b981,color:#6ee7b7
+    style ANALYSE fill:#2a1e0d,stroke:#f59e0b,color:#fbbf24
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════ DÉTAIL PAR COUCHE ═══════════════════ -->
+<section class="arch-section">
+  <h2>📋 Détail par couche</h2>
+
+  <!-- Couche 1 : SIRENE -->
+  <details class="layer-section" open>
+    <summary>
+      <span class="layer-icon">🏢</span>
+      <span class="layer-name">Couche 1 — SIRENE (socle : 1.1 Unités légales + 1.2 Établissements)</span>
+      <span class="layer-stats">
+        <span class="layer-stat"><span class="v" id="s1-total" style="color:#a78bfa">—</span><span class="l">UL (1.1)</span></span>
+        <span class="layer-stat"><span class="v" id="s1e-total" style="color:#c084fc">—</span><span class="l">Etab (1.2)</span></span>
+        <span class="layer-stat"><span class="v" id="s1-size" style="color:#a78bfa">—</span><span class="l">Volume</span></span>
+      </span>
+      <span class="chevron">▶</span>
+    </summary>
+    <div class="body">
+      <p style="color:#94a3b8;font-size:.85rem;margin-bottom:16px">
+        Base de référence : répertoire national des unités légales de l'INSEE. Toute entité juridique
+        (entreprise, association, organisme public) y est identifiée par un SIREN unique.
+        La couche 1.2 ajoute les établissements (SIRET) avec géolocalisation, état administratif et APE.
+      </p>
+      <a class="dash-btn" href="https://metabase.hermes.stelio-ia.fr/dashboard/1" target="_blank">📊 Dashboard SIRENE (1.1 + 1.2) →</a>
+      <a class="dash-btn" href="/cartes" style="margin-left:8px">🗺️ Carte →</a>
+      <div class="grid" style="margin-top:20px">
+        <div class="card">
+          <h3>⚡ Chargement — 1.1 Unités légales (SIREN)</h3>
+          <div class="tags"><span class="p">Python</span><span class="c">COPY PostgreSQL</span></div>
+          <p>Conversion ISO-8859-1 → UTF-8, COPY en 3 minutes, 5 indexes</p>
+          <div class="mermaid-box">
+            <div class="mermaid">
+flowchart LR
+    A["📄 CSV 3.4 Go"] --> B["🐍 Conversion UTF-8"]
+    B --> C["📥 COPY STDIN"]
+    C --> D[("🐘 stock_unite_legale")]
+    D --> E["🔍 5 indexes"]
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <h3>📊 Aperçu 1.1 — Unités légales</h3>
+          <div class="data-row">
+            <div class="data-item"><span class="dl">Total UL</span><span class="dv" id="s1-total2">—</span></div>
+            <div class="data-item"><span class="dl">Actives (A)</span><span class="dv" id="s1-actives2">—</span></div>
+            <div class="data-item"><span class="dl">Cessées (C)</span><span class="dv" id="s1-cessees">—</span></div>
+            <div class="data-item"><span class="dl">Volume</span><span class="dv" id="s1-size2">—</span></div>
+            <div class="data-item"><span class="dl">Cat. dominante</span><span class="dv" id="s1-cat">—</span></div>
+          </div>
+        </div>
+        <div class="card">
+          <h3>⚡ Chargement — 1.2 Établissements (SIRET)</h3>
+          <div class="tags"><span class="p">CSV natif UTF-8</span><span class="c">COPY PostgreSQL</span></div>
+          <p>Fichier CSV 6.5 Go, 48 colonnes, COPY en 11 minutes, 6 indexes. Jointure avec 1.1 via SIREN.</p>
+          <div class="mermaid-box">
+            <div class="mermaid">
+flowchart LR
+    A2["📄 CSV 6.5 Go"] --> C2["📥 COPY STDIN"]
+    C2 --> D2[("🐘 stock_etablissement")]
+    D2 --> E2["🔍 6 indexes"]
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <h3>📊 Aperçu 1.2 — Établissements</h3>
+          <div class="data-row">
+            <div class="data-item"><span class="dl">Total Étab</span><span class="dv" id="s1e-total2">—</span></div>
+            <div class="data-item"><span class="dl">Actifs</span><span class="dv" id="s1e-actifs">—</span></div>
+            <div class="data-item"><span class="dl">Fermés</span><span class="dv" id="s1e-fermes">—</span></div>
+            <div class="data-item"><span class="dl">Sièges</span><span class="dv" id="s1e-sieges">—</span></div>
+            <div class="data-item"><span class="dl">Volume</span><span class="dv" id="s1e-size">—</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </details>
+
+  <!-- Couche 2 : France Services -->
+  <details class="layer-section">
+    <summary>
+      <span class="layer-icon">🏛️</span>
+      <span class="layer-name">Couche 2 — France Services</span>
+      <span class="layer-stats">
+        <span class="layer-stat"><span class="v" id="s2-total" style="color:#4ade80">—</span><span class="l">Structures</span></span>
+        <span class="layer-stat"><span class="v" id="s2-depts" style="color:#4ade80">—</span><span class="l">Départements</span></span>
+        <span class="layer-stat"><span class="v" style="color:#4ade80">33</span><span class="l">Colonnes</span></span>
+      </span>
+      <span class="chevron">▶</span>
+    </summary>
+    <div class="body">
+      <p style="color:#94a3b8;font-size:.85rem;margin-bottom:16px">
+        Annuaire national des structures France Services et points d'accueil du service public.
+        Géolocalisées avec coordonnées, horaires, services proposés.
+      </p>
+      <a class="dash-btn" href="https://metabase.hermes.stelio-ia.fr/dashboard/6" target="_blank">📊 Dashboard Analyse France Services →</a>
+      <div class="grid" style="margin-top:20px">
+        <div class="card">
+          <h3>🔧 Pipeline KNIME</h3>
+          <div class="tags"><span class="k">KNIME — Excel Reader</span><span class="k">DB Connector</span><span class="k">DB Row Writer</span></div>
+          <p>Workflow 04_france_services_to_postgres — import XLSX → PostgreSQL</p>
+          <div class="mermaid-box">
+            <div class="mermaid">
+flowchart LR
+    A["📄 Excel Reader"] --> B["📦 DB Row Writer"]
+    C["🔌 DB Connector"] --> B
+    B --> D[("🐘 france_services")]
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <h3>📊 Dashboard Metabase</h3>
+          <div class="tags"><span class="m">4 KPIs</span><span class="m">Carte</span><span class="m">Bar/Pie</span><span class="m">Tableaux</span></div>
+          <p>9 cartes interactives : KPIs, carte départements, top catégories, top régions, top villes</p>
+          <div class="data-row">
+            <div class="data-item"><span class="dl">Total structures</span><span class="dv" id="s2-total2">—</span></div>
+            <div class="data-item"><span class="dl">Avec téléphone</span><span class="dv" id="s2-tel">—</span></div>
+            <div class="data-item"><span class="dl">Avec email</span><span class="dv" id="s2-email">—</span></div>
+            <div class="data-item"><span class="dl">Ville n°1</span><span class="dv" id="s2-ville">—</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </details>
+
+  <!-- Couche 3 : Annuaire Santé -->
+  <details class="layer-section">
+    <summary>
+      <span class="layer-icon">🩺</span>
+      <span class="layer-name">Couche 3 — Annuaire Santé</span>
+      <span class="layer-stats">
+        <span class="layer-stat"><span class="v" id="s3-total" style="color:#60a5fa">—</span><span class="l">Professionnels</span></span>
+        <span class="layer-stat"><span class="v" id="s3-tables" style="color:#60a5fa">—</span><span class="l">Tables</span></span>
+        <span class="layer-stat"><span class="v" style="color:#60a5fa">~1.8 Go</span><span class="l">Volume</span></span>
+      </span>
+      <span class="chevron">▶</span>
+    </summary>
+    <div class="body">
+      <p style="color:#94a3b8;font-size:.85rem;margin-bottom:16px">
+        Données de l'Annuaire Santé / RPPS : professionnels de santé actifs, diplômes,
+        savoir-faire, cartes CPS et messagerie sécurisée MSSanté.
+      </p>
+      <a class="dash-btn" href="https://metabase.hermes.stelio-ia.fr/dashboard/3" target="_blank">📊 Dashboard Annuaire Santé →</a>
+      <div class="grid" style="margin-top:20px">
+        <div class="card">
+          <h3>⚡ Chargement — 5 tables</h3>
+          <div class="tags"><span class="c">COPY STDIN ×5</span><span class="p">Python</span></div>
+          <p>Chargement de 5 fichiers pipe-delimited avec gestion des pièges (pipe final, guillemets MSSanté)</p>
+          <div class="mermaid-box">
+            <div class="mermaid">
+flowchart TB
+    subgraph FICHIERS["📁 5 fichiers source"]
+        F1["personne_activite<br/><small>747 Mo</small>"]
+        F2["diplomes<br/><small>256 Mo</small>"]
+        F3["porteurs_cps<br/><small>142 Mo</small>"]
+        F4["mssante<br/><small>87 Mo</small>"]
+        F5["savoir_faire<br/><small>48 Mo</small>"]
+    end
+    subgraph PG["🐘 PostgreSQL"]
+        T1[(annuaire_personne_activite)]
+        T2[(annuaire_diplomes)]
+        T3[(annuaire_porteurs_cps)]
+        T4[(annuaire_mssante)]
+        T5[(annuaire_savoir_faire)]
+    end
+    F1 -->|COPY| T1
+    F2 -->|COPY| T2
+    F3 -->|COPY| T3
+    F4 -->|COPY| T4
+    F5 -->|COPY| T5
+    F5 -->|COPY| T5
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <h3>📊 Dashboard Metabase</h3>
+          <div class="tags"><span class="m">10 cartes</span><span class="m">4 KPIs</span><span class="m">3 Bar charts</span><span class="m">1 Pie</span><span class="m">2 Tableaux</span></div>
+          <p>Dashboard interactif complet sur l'offre de soins par profession, secteur, commune et département</p>
+          <div class="data-row">
+            <div class="data-item"><span class="dl">Total pros</span><span class="dv" id="s3-total2">—</span></div>
+            <div class="data-item"><span class="dl">Profession n°1</span><span class="dv" id="s3-pro">—</span></div>
+            <div class="data-item"><span class="dl">Commune n°1</span><span class="dv" id="s3-ville">—</span></div>
+            <div class="data-item"><span class="dl">Départements</span><span class="dv" id="s3-depts">—</span></div>
+            <div class="data-item"><span class="dl">Avec SIRET</span><span class="dv" id="s3-siret">—</span></div>
+            <div class="data-item"><span class="dl">Avec téléphone</span><span class="dv" id="s3-tel">—</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </details>
+
+  <!-- Couche 4 : Nomenclatures -->
+  <details class="layer-section">
+    <summary>
+      <span class="layer-icon">📋</span>
+      <span class="layer-name">Couche 4 — Nomenclatures (référentiels)</span>
+      <span class="layer-stats">
+        <span class="layer-stat"><span class="v" style="color:#fbbf24">2</span><span class="l">Tables</span></span>
+        <span class="layer-stat"><span class="v" style="color:#fbbf24">122</span><span class="l">Codes</span></span>
+        <span class="layer-stat"><span class="v" style="color:#fbbf24">—</span><span class="l">Jointures</span></span>
+      </span>
+      <span class="chevron">▶</span>
+    </summary>
+    <div class="body">
+      <p style="color:#94a3b8;font-size:.85rem;margin-bottom:16px">
+        Tables de référence qualifiant les codes des couches métier : secteurs d'activité santé
+        (SA01–SA64, source ASIP Santé/FHIR) et catégories de services OCIRP-AGLAEE.
+        Utilisées pour enrichir les vues et résoudre les codes en libellés lisibles.
+      </p>
+      <a class="dash-btn" href="https://metabase.hermes.stelio-ia.fr/dashboard/3" target="_blank">📊 Dashboard Annuaire Santé (secteurs résolus) →</a>
+      <div class="grid" style="margin-top:20px">
+        <div class="card">
+          <h3>📋 Secteurs d'activité Santé (SA01–SA64)</h3>
+          <div class="tags"><span class="p">FHIR CodeSystem</span><span class="c">ISO-8859-1 → UTF-8</span></div>
+          <p>64 codes décrivant les types d'établissements et structures de santé.
+          Jointure avec <code>annuaire_personne_activite.code_secteur_activite</code>
+          via la vue <code>vue_pros_secteurs</code> (1.6M résolus, 554K non renseignés).</p>
+          <div class="mermaid-box">
+            <div class="mermaid">
+flowchart LR
+    A["📋 SA01-SA64<br/><small>ISO-8859-1</small>"] --> B["🐍 Conversion UTF-8"]
+    B --> C["📥 COPY STDIN"]
+    C --> D[("🐘 secteur_activite_sante")]
+    D --> E["🔗 vue_pros_secteurs<br/><small>JOIN code_secteur</small>"]
+    E --> F["📊 Dashboard<br/><small>secteurs résolus</small>"]
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <h3>🏷️ Catégories de services OCIRP-AGLAEE</h3>
+          <div class="tags"><span class="p">CSV UTF-8</span></div>
+          <p>10 catégories : Accompagnement, Aides, Allocations, Emploi, Logement, Mobilité, Santé, etc.</p>
+          <div class="data-row">
+            <div class="data-item"><span class="dl">Catégories</span><span class="dv">10</span></div>
+            <div class="data-item"><span class="dl">Source</span><span class="dv">OCIRP-AGLAEE</span></div>
+            <div class="data-item"><span class="dl">Format</span><span class="dv">CSV ; UTF-8</span></div>
+            <div class="data-item"><span class="dl">Fichier</span><span class="dv">426 octets</span></div>
+          </div>
+          <div class="mermaid-box">
+            <div class="mermaid">
+flowchart LR
+    A["📋 ocirp-aglaee<br/><small>10 catégories</small>"] --> B["📥 COPY STDIN"]
+    B --> C[("🐘 ocirp_categories")]
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </details>
+
+  <!-- Couche 5 : Open Data Santé -->
+  <details class="layer-section">
+    <summary>
+      <span class="layer-icon">📦</span>
+      <span class="layer-name">Couche 5 — Open Data Santé</span>
+      <span class="layer-stats">
+        <span class="layer-stat"><span class="v" style="color:#f97316">12</span><span class="l">Tables</span></span>
+        <span class="layer-stat"><span class="v" style="color:#f97316">30.8M</span><span class="l">Lignes</span></span>
+        <span class="layer-stat"><span class="v" style="color:#f97316">5.2 Go</span><span class="l">Volume</span></span>
+      </span>
+      <span class="chevron">▶</span>
+    </summary>
+    <div class="body">
+      <p style="color:#94a3b8;font-size:.85rem;margin-bottom:16px">
+        Données ouvertes de l'Annuaire Santé (CNAM) : infos pratiques, tarifs, établissements FINESS,
+        base de remboursement, communes avec coordonnées GPS. Jointures possibles avec les couches 2 et 3
+        via code postal, commune et FINESS.
+      </p>
+      <a class="dash-btn" href="https://metabase.hermes.stelio-ia.fr/dashboard/4" target="_blank">📊 Dashboard Analyse Open Data Santé →</a>
+      <div class="grid" style="margin-top:20px">
+        <div class="card">
+          <h3>🗺️ Référentiel communes (BAN 2025)</h3>
+          <div class="tags"><span class="c">CSV comma</span><span class="p">Latin-1</span></div>
+          <p>34 935 communes avec code INSEE, population, superficie, coordonnées GPS (lat/lon mairie et centre), région, département, EPCI.</p>
+          <div class="data-row">
+            <div class="data-item"><span class="dl">Communes</span><span class="dv">34 935</span></div>
+            <div class="data-item"><span class="dl">Colonnes</span><span class="dv">47+</span></div>
+            <div class="data-item"><span class="dl">Coordonnées GPS</span><span class="dv">lat/lon centre</span></div>
+          </div>
+        </div>
+        <div class="card">
+          <h3>📍 Adresses nationales (BAN)</h3>
+          <div class="tags"><span class="c">CSV ; UTF-8</span><span class="k">23 colonnes</span></div>
+          <p>26M d'adresses géolocalisées : numéro, voie, code postal, commune, coordonnées GPS (lambert 93 + WGS84), certification communale.</p>
+          <div class="data-row">
+            <div class="data-item"><span class="dl">Adresses</span><span class="dv" id="s5-adr-total">—</span></div>
+            <div class="data-item"><span class="dl">Volume</span><span class="dv" id="s5-adr-size">—</span></div>
+            <div class="data-item"><span class="dl">Départements</span><span class="dv" id="s5-adr-depts">—</span></div>
+          </div>
+        </div>
+        <div class="card">
+          <h3>🕐 Infos pratiques PS</h3>
+          <div class="tags"><span class="c">CSV ; Latin-1</span></div>
+          <p>1.49M lignes : horaires d'ouverture, modes de consultation (présentiel, téléconsultation), vaccination, nature d'exercice.</p>
+          <div class="data-row">
+            <div class="data-item"><span class="dl">Lignes</span><span class="dv">1 486 725</span></div>
+            <div class="data-item"><span class="dl">Volume</span><span class="dv">172 Mo</span></div>
+          </div>
+        </div>
+        <div class="card">
+          <h3>💶 Tarifs PS</h3>
+          <div class="tags"><span class="c">CSV ; Latin-1</span></div>
+          <p>2.34M lignes : tarifs de base, dépassements par acte CCAM, secteur conventionnel.</p>
+          <div class="data-row">
+            <div class="data-item"><span class="dl">Lignes</span><span class="dv">2 342 509</span></div>
+            <div class="data-item"><span class="dl">Volume</span><span class="dv">331 Mo</span></div>
+          </div>
+        </div>
+        <div class="card">
+          <h3>🏥 Établissements FINESS</h3>
+          <div class="tags"><span class="c">ETALAB</span><span class="p">Latin-1</span></div>
+          <p>306K établissements (102K FINESS + 204K étendu) avec catégorie, discipline, SIRET, dates.</p>
+          <div class="data-row">
+            <div class="data-item"><span class="dl">FINESS</span><span class="dv">101 920</span></div>
+            <div class="data-item"><span class="dl">FINESS ext.</span><span class="dv">203 768</span></div>
+            <div class="data-item"><span class="dl">Volume</span><span class="dv">77 Mo</span></div>
+          </div>
+        </div>
+        <div class="card">
+          <h3>📋 Autres tables</h3>
+          <div class="tags"><span class="k">etb_tarifs</span><span class="k">base_remboursement</span><span class="k">ps_dans_etb</span></div>
+          <p>Tarifs établissements (204K), base remboursement (400K), pros dans établissements (23K), PRADO, spécialités externes, cas dentaires.</p>
+          <div class="mermaid-box">
+            <div class="mermaid">
+flowchart LR
+    A["📦 Open Data<br/><small>11 fichiers</small>"] --> B["🐍 Nettoyage<br/><small>Latin-1, padding</small>"]
+    B --> C["📥 COPY STDIN<br/><small>QUOTE désactivé</small>"]
+    C --> D[("🐘 11 tables<br/><small>4.8M lignes</small>")]
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </details>
+</section>
+
+</main>
+
+<footer>
+  Agentic ETL Stack · PostgreSQL 16 + Metabase · Généré par Hermes Agent ·
+  <a href="https://metabase.hermes.stelio-ia.fr">Metabase</a> ·
+  <a href="https://github.com/stelio-fondation/agentic-etl-stack">GitHub</a>
+</footer>
+
+<script>
+  // Mermaid — save sources
+  document.querySelectorAll('.mermaid').forEach(el => {
+    el.setAttribute('data-mermaid-src', el.textContent.trim());
+  });
+
+  mermaid.initialize({
+    startOnLoad: true, theme: 'dark',
+    themeVariables: {
+      primaryColor: '#1e40af', primaryBorderColor: '#60a5fa', primaryTextColor: '#e2e8f0',
+      lineColor: '#60a5fa', secondaryColor: '#1e293b', tertiaryColor: '#0f172a',
+      mainBkg: '#1e293b', nodeBorder: '#334155', clusterBkg: '#0f172a',
+      clusterBorder: '#334155', titleColor: '#f1f5f9', edgeLabelBackground: '#1e293b',
+      nodeTextColor: '#e2e8f0'
+    },
+    flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis', padding: 20 }
+  });
+
+  // Re-render on details toggle
+  document.querySelectorAll('.layer-section').forEach(section => {
+    section.addEventListener('toggle', async () => {
+      if (!section.open) return;
+      const els = section.querySelectorAll('.mermaid');
+      for (const el of els) {
+        const src = el.getAttribute('data-mermaid-src');
+        if (src) el.textContent = src;
+        el.removeAttribute('data-processed');
+        await mermaid.run({ nodes: [el] });
+      }
+    });
+  });
+
+  // Stats
+  async function refresh() {
+    try {
+      const r = await fetch('/api/stats');
+      if (!r.ok) return;
+      const d = await r.json();
+
+      // Pyramid
+      setNum('py-su', d.sirene?.total);
+      setNum('py-etab', d.etablissements?.total);
+      setNum('py-fs', d.france_services?.total);
+      setNum('py-an', d.annuaire_sante?.total);
+      set('py-size', d.sirene?.size);
+
+      // Cross
+      setNum('x-fs-su', d.croisements?.fs_sirene);
+      setNum('x-an-su', d.croisements?.an_sirene);
+      setNum('x-depts', d.croisements?.depts_communs_fs_an);
+
+      // SIRENE
+      setNum('s1-total', d.sirene?.total);
+      setNum('s1-total2', d.sirene?.total);
+      setNum('s1-actives2', d.sirene?.actives);
+      setNum('s1-cessees', d.sirene?.cessees);
+      set('s1-size', d.sirene?.size);
+      set('s1-size2', d.sirene?.size);
+      set('s1-cat', d.sirene?.top_cat);
+
+      // Établissements (1.2)
+      setNum('s1e-total', d.etablissements?.total);
+      setNum('s1e-total2', d.etablissements?.total);
+      setNum('s1e-actifs', d.etablissements?.actifs);
+      setNum('s1e-fermes', d.etablissements?.fermes);
+      setNum('s1e-sieges', d.etablissements?.sieges);
+      set('s1e-size', d.etablissements?.size);
+
+      // France Services
+      setNum('s2-total', d.france_services?.total);
+      setNum('s2-total2', d.france_services?.total);
+      setNum('s2-depts', d.france_services?.depts);
+      setNum('s2-tel', d.france_services?.tel);
+      setNum('s2-email', d.france_services?.email);
+      set('s2-ville', d.france_services?.top_ville);
+
+      // Annuaire Santé
+      setNum('s3-total', d.annuaire_sante?.total);
+      setNum('s3-total2', d.annuaire_sante?.total);
+      setNum('s3-tables', d.annuaire_sante?.nb_tables);
+      setNum('s3-depts', d.annuaire_sante?.depts);
+      setNum('s3-tel', d.annuaire_sante?.tel);
+      setNum('s3-email', d.annuaire_sante?.email);
+      setNum('s3-siret', d.annuaire_sante?.siret);
+      set('s3-pro', d.annuaire_sante?.top_pro);
+      set('s3-ville', d.annuaire_sante?.top_commune);
+
+      // Open Data — Adresses BAN
+      setNum('s5-adr-total', d.adresses_france?.total);
+      set('s5-adr-size', d.adresses_france?.size);
+      setNum('s5-adr-depts', d.adresses_france?.depts);
+    } catch(e) {}
+  }
+
+  function setNum(id, val) {
+    const el = document.getElementById(id);
+    if (!el || val === undefined || val === null) return;
+    el.textContent = Number(val).toLocaleString('fr-FR');
+  }
+  function set(id, val) {
+    const el = document.getElementById(id);
+    if (!el || val === undefined || val === null) return;
+    el.textContent = String(val);
+  }
+
+  refresh();
+</script>
+</body>
+</html>

@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cartes — Référentiel National des Structures</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:Inter,sans-serif;background:#0b1120;color:#e2e8f0;display:flex;flex-direction:column;height:100vh}
+  header{background:#0f172a;border-bottom:1px solid #1e293b;padding:16px 24px;display:flex;align-items:center;gap:16px;z-index:1000}
+  header h1{font-size:1.2rem;font-weight:700;background:linear-gradient(135deg,#60a5fa,#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+  header a{color:#64748b;text-decoration:none;font-size:.85rem;margin-left:auto}
+  header a:hover{color:#94a3b8}
+  #map{flex:1;cursor:grab}
+  .panel{position:absolute;top:80px;right:16px;z-index:999;background:#0f172a;border:1px solid #1e293b;border-radius:12px;padding:16px;min-width:260px;box-shadow:0 8px 32px rgba(0,0,0,.4)}
+  .panel h3{font-size:.85rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px}
+  .panel button{display:block;width:100%;padding:8px 14px;margin-bottom:4px;background:transparent;border:1px solid #1e293b;border-radius:8px;color:#94a3b8;cursor:pointer;font-size:.82rem;text-align:left;transition:all .2s;font-family:inherit}
+  .panel button:hover,.panel button.active{background:#1e3a5f;color:#60a5fa;border-color:#3b82f6}
+  .legend{position:absolute;bottom:24px;left:16px;z-index:999;background:#0f172a;border:1px solid #1e293b;border-radius:10px;padding:12px 16px;font-size:.75rem}
+  .legend .bar{height:10px;border-radius:5px;margin:4px 0 8px}
+  .legend .labels{display:flex;justify-content:space-between;color:#64748b}
+  .info-panel{position:absolute;top:80px;left:16px;z-index:999;background:#0f172a;border:1px solid #1e293b;border-radius:10px;padding:12px 16px;font-size:.8rem;color:#94a3b8;pointer-events:none}
+  .info-panel strong{color:#f1f5f9}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🗺️ Cartes — Référentiel National</h1>
+  <a href="/">← Workflows</a>
+</header>
+
+<div id="map"></div>
+
+<div class="panel">
+  <h3>Couche de données</h3>
+  <button class="active" data-layer="france_services">🏛️ France Services</button>
+  <button data-layer="annuaire_sante">🩺 Annuaire Santé</button>
+  <button data-layer="open_data">📦 Open Data</button>
+  <button data-layer="sirene">🏢 SIRENE (activité)</button>
+</div>
+
+<div class="info-panel" id="info">Survolez un département</div>
+
+<script>
+const map = L.map('map').setView([46.8, 2.3], 6);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  attribution: '&copy; OpenStreetMap, CARTO',
+  maxZoom: 10
+}).addTo(map);
+
+let geoJsonLayer = null;
+let currentData = {};
+
+const colors = ['#0b2e59','#0d3b6e','#0f4a84','#115999','#1368af','#1577c4','#1786da','#1a95ef','#3ca4f2','#5eb3f4','#80c2f7','#a3d1f9','#c5e0fc'];
+
+function getColor(val, max) {
+  if (!val || max === 0) return '#1e293b';
+  const ratio = val / max;
+  const idx = Math.min(Math.floor(ratio * colors.length), colors.length - 1);
+  return colors[idx];
+}
+
+function styleFeature(feature) {
+  const code = feature.properties.code;
+  const val = currentData[code] || 0;
+  const maxVal = Math.max(1, ...Object.values(currentData));
+  return {
+    fillColor: getColor(val, maxVal),
+    weight: 1,
+    opacity: 1,
+    color: '#1e293b',
+    fillOpacity: val > 0 ? 0.85 : 0.15
+  };
+}
+
+function highlightFeature(e) {
+  const layer = e.target;
+  layer.setStyle({ weight: 2, color: '#60a5fa' });
+  layer.bringToFront();
+  const code = layer.feature.properties.code;
+  const nom = layer.feature.properties.nom;
+  const val = currentData[code] || 0;
+  document.getElementById('info').innerHTML = `<strong>${nom} (${code})</strong><br>${val.toLocaleString('fr-FR')}`;
+}
+
+function resetHighlight(e) {
+  geoJsonLayer && geoJsonLayer.resetStyle(e.target);
+  document.getElementById('info').innerHTML = 'Survolez un département';
+}
+
+function onEachFeature(feature, layer) {
+  layer.on({ mouseover: highlightFeature, mouseout: resetHighlight });
+}
+
+async function loadLayer(layerName) {
+  document.querySelectorAll('.panel button').forEach(b => b.classList.remove('active'));
+  document.querySelector(`[data-layer="${layerName}"]`).classList.add('active');
+
+  const resp = await fetch(`/api/mapdata/${layerName}`);
+  const json = await resp.json();
+  currentData = {};
+  json.data.forEach(d => { currentData[d.dept] = d.val; });
+
+  if (geoJsonLayer) {
+    geoJsonLayer.setStyle(styleFeature);
+  }
+}
+
+// Event listeners pour les boutons
+document.querySelectorAll('.panel button').forEach(btn => {
+  btn.addEventListener('click', () => loadLayer(btn.dataset.layer));
+});
+
+// Charger le GeoJSON France départements
+fetch('/departements.geojson')
+  .then(r => r.json())
+  .then(geojson => {
+    geoJsonLayer = L.geoJson(geojson, {
+      style: styleFeature,
+      onEachFeature: onEachFeature
+    }).addTo(map);
+    map.fitBounds(geoJsonLayer.getBounds());
+    loadLayer('france_services');
+  });
+</script>
+</body>
+</html>
