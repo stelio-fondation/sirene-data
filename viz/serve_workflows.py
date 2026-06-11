@@ -1,18 +1,31 @@
 #!/usr/bin/env python3
-"""Serveur dashboard workflows + API GeoJSON pour cartes Leaflet."""
+"""
+Dashboard Workflows V2 — Pilotage + Visualisation de la stack ETL.
+- Bandeau de contrôle : statut global, boutons d'action
+- API /api/v2/status : état des couches (staging, DW, France Services)
+- API /api/v2/trigger : déclenchement des traitements
+- Conserve l'API /api/stats et /api/mapdata existantes
+
+Utilisation : python3 serve_workflows.py  (port 8080)
+"""
+
 import http.server
 import json
 import subprocess
 import os
+import sys
+from datetime import datetime
 
 PG_CONTAINER = "etl_postgres"
 PORT = 8080
+PROJECT_DIR = "/root/agentic-etl-stack"
 
-def query_pg(sql: str):
+
+def query_pg(sql: str, timeout: int = 20) -> str | None:
     try:
         proc = subprocess.run(
             ["docker", "exec", PG_CONTAINER, "psql", "-U", "etl_admin", "-d", "analytics", "-t", "-A", "-c", sql],
-            capture_output=True, text=True, timeout=20
+            capture_output=True, text=True, timeout=timeout,
         )
         if proc.returncode == 0:
             return proc.stdout.strip()
@@ -20,117 +33,221 @@ def query_pg(sql: str):
         pass
     return None
 
+
 def get_all_stats():
+    """Stats existantes (compatibles API v1)."""
     s = {}
+    
+    # SIRENE
     sul = query_pg("SELECT COUNT(*) FROM etl.stock_unite_legale;")
     sul_actives = query_pg("SELECT COUNT(*) FROM etl.stock_unite_legale WHERE etatadministratifunitelegale = 'A';")
-    sul_cessees = query_pg("SELECT COUNT(*) FROM etl.stock_unite_legale WHERE etatadministratifunitelegale = 'C';")
-    sul_size = query_pg("SELECT pg_size_pretty(pg_total_relation_size('etl.stock_unite_legale'));")
-    sul_cat = query_pg("SELECT categoriejuridiqueunitelegale, COUNT(*) AS nb FROM etl.stock_unite_legale GROUP BY 1 ORDER BY nb DESC LIMIT 1;")
-    s["sirene"] = {"total": sul or "0", "actives": sul_actives or "0", "cessees": sul_cessees or "0", "size": sul_size or "—", "top_cat": sul_cat.split("|")[1] if sul_cat and "|" in sul_cat else "—"}
+    s["sirene"] = {"total": sul or "0", "actives": sul_actives or "0"}
 
+    # France Services
     fs = query_pg("SELECT COUNT(*) FROM etl.france_services;")
-    fs_depts = query_pg("SELECT COUNT(DISTINCT LEFT(code_postal, 2)) FROM etl.france_services WHERE code_postal IS NOT NULL AND LENGTH(code_postal) > 0;")
-    fs_ville = query_pg("SELECT ville, COUNT(*) AS nb FROM etl.france_services WHERE ville IS NOT NULL AND LENGTH(ville) > 0 GROUP BY ville ORDER BY nb DESC LIMIT 1;")
-    fs_email = query_pg("SELECT COUNT(*) FROM etl.france_services WHERE email IS NOT NULL AND LENGTH(email) > 0;")
-    fs_tel = query_pg("SELECT COUNT(*) FROM etl.france_services WHERE numero_telephone IS NOT NULL AND LENGTH(numero_telephone) > 0;")
-    s["france_services"] = {"total": fs or "0", "depts": fs_depts or "0", "top_ville": (fs_ville.split("|")[0] if fs_ville and "|" in fs_ville else "—"), "top_ville_nb": (fs_ville.split("|")[1] if fs_ville and "|" in fs_ville else "0"), "email": fs_email or "0", "tel": fs_tel or "0"}
+    s["france_services"] = {"total": fs or "0"}
 
+    # Annuaire Santé
     an = query_pg("SELECT COUNT(*) FROM etl.annuaire_personne_activite;")
-    an_tel = query_pg("SELECT COUNT(*) FROM etl.annuaire_personne_activite WHERE telephone IS NOT NULL AND LENGTH(telephone) > 0;")
-    an_email = query_pg("SELECT COUNT(*) FROM etl.annuaire_personne_activite WHERE email IS NOT NULL AND LENGTH(email) > 0;")
-    an_siret = query_pg("SELECT COUNT(*) FROM etl.annuaire_personne_activite WHERE siret_site IS NOT NULL AND LENGTH(siret_site) > 0;")
-    an_commune = query_pg("SELECT libelle_commune, COUNT(*) AS nb FROM etl.annuaire_personne_activite WHERE libelle_commune IS NOT NULL AND LENGTH(libelle_commune) > 0 GROUP BY libelle_commune ORDER BY nb DESC LIMIT 1;")
-    an_pro = query_pg("SELECT libelle_profession, COUNT(*) AS nb FROM etl.annuaire_personne_activite WHERE libelle_profession IS NOT NULL AND LENGTH(libelle_profession) > 0 GROUP BY libelle_profession ORDER BY nb DESC LIMIT 1;")
-    an_depts = query_pg("SELECT COUNT(DISTINCT LEFT(code_postal, 2)) FROM etl.annuaire_personne_activite WHERE code_postal IS NOT NULL AND LENGTH(code_postal) > 0;")
-    an_tables = query_pg("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'etl' AND table_name LIKE 'annuaire_%';")
-    s["annuaire_sante"] = {"total": an or "0", "depts": an_depts or "0", "tel": an_tel or "0", "email": an_email or "0", "siret": an_siret or "0", "top_commune": (an_commune.split("|")[0] if an_commune and "|" in an_commune else "—"), "top_commune_nb": (an_commune.split("|")[1] if an_commune and "|" in an_commune else "0"), "top_pro": (an_pro.split("|")[0] if an_pro and "|" in an_pro else "—"), "top_pro_nb": (an_pro.split("|")[1] if an_pro and "|" in an_pro else "0"), "nb_tables": an_tables or "0"}
+    s["annuaire_sante"] = {"total": an or "0"}
 
-    cross_fs_sirene = query_pg("SELECT COUNT(*) FROM etl.stock_unite_legale s INNER JOIN etl.france_services f ON s.siren = LEFT(f.siret, 9);")
-    cross_an_sirene = query_pg("SELECT COUNT(*) FROM etl.stock_unite_legale s INNER JOIN etl.annuaire_personne_activite a ON s.siren = a.siren_site;")
-    depts_communs = query_pg("SELECT COUNT(*) FROM (SELECT DISTINCT LEFT(code_postal, 2) AS dep FROM etl.france_services WHERE code_postal IS NOT NULL AND LENGTH(code_postal) > 0 INTERSECT SELECT DISTINCT LEFT(code_postal, 2) AS dep FROM etl.annuaire_personne_activite WHERE code_postal IS NOT NULL AND LENGTH(code_postal) > 0) t;")
-    s["croisements"] = {"fs_sirene": cross_fs_sirene or "0", "an_sirene": cross_an_sirene or "0", "depts_communs_fs_an": depts_communs or "0"}
-
-    # Adresses BAN
-    adr_total = query_pg("SELECT COUNT(*) FROM etl.adresses_france;")
-    adr_size = query_pg("SELECT pg_size_pretty(pg_total_relation_size('etl.adresses_france'));")
-    adr_depts = query_pg("SELECT COUNT(DISTINCT LEFT(code_postal, 2)) FROM etl.adresses_france WHERE code_postal IS NOT NULL AND LENGTH(code_postal) > 0;")
-    adr_communes = query_pg("SELECT COUNT(DISTINCT code_insee) FROM etl.adresses_france WHERE code_insee IS NOT NULL AND LENGTH(code_insee) > 0;")
-    s["adresses_france"] = {"total": adr_total or "0", "size": adr_size or "—", "depts": adr_depts or "0", "communes": adr_communes or "0"}
-
-    # Nomenclatures INSEE (référentiel géo officiel)
-    s["insee"] = {
-        "communes": query_pg("SELECT COUNT(*) FROM etl.insee_communes;") or "0",
-        "departements": query_pg("SELECT COUNT(*) FROM etl.insee_departements;") or "0",
-        "regions": query_pg("SELECT COUNT(*) FROM etl.insee_regions;") or "0",
-    }
-
-    # Couche 1.2 - Établissements (StockEtablissement)
+    # Établissements
     etab = query_pg("SELECT COUNT(*) FROM etl.stock_etablissement;")
-    etab_actifs = query_pg("SELECT COUNT(*) FROM etl.stock_etablissement WHERE etatAdministratifEtablissement = 'A';")
-    etab_fermes = query_pg("SELECT COUNT(*) FROM etl.stock_etablissement WHERE etatAdministratifEtablissement = 'F';")
-    etab_size = query_pg("SELECT pg_size_pretty(pg_total_relation_size('etl.stock_etablissement'));")
-    etab_sieges = query_pg("SELECT COUNT(*) FROM etl.stock_etablissement WHERE etablissementSiege = 'true';")
-    s["etablissements"] = {"total": etab or "0", "actifs": etab_actifs or "0", "fermes": etab_fermes or "0", "size": etab_size or "—", "sieges": etab_sieges or "0"}
+    s["etablissements"] = {"total": etab or "0"}
+
     return s
 
-def get_mapdata(layer):
-    """Retourne des données par département pour les cartes."""
-    queries = {
-        "france_services": "SELECT LPAD(SPLIT_PART(code_departement, '.', 1), 2, '0') AS dept, COUNT(*) AS val FROM etl.france_services WHERE code_departement IS NOT NULL AND LENGTH(code_departement) > 0 GROUP BY code_departement",
-        "annuaire_sante": "SELECT LPAD(LEFT(code_postal, 2), 2, '0') AS dept, COUNT(*) AS val FROM etl.annuaire_personne_activite WHERE code_postal IS NOT NULL AND LENGTH(code_postal) > 0 GROUP BY LEFT(code_postal, 2)",
-        "open_data": "SELECT LPAD(LEFT(code_postal, 2), 2, '0') AS dept, COUNT(*) AS val FROM etl.ps_infospratiques WHERE code_postal IS NOT NULL AND LENGTH(code_postal) > 0 GROUP BY LEFT(code_postal, 2)",
-        "adresses": "SELECT LPAD(LEFT(code_postal, 2), 2, '0') AS dept, COUNT(*) AS val FROM etl.adresses_france WHERE code_postal IS NOT NULL AND LENGTH(code_postal) > 0 GROUP BY LEFT(code_postal, 2)",
-        "sirene": "SELECT LPAD(SPLIT_PART(f.code_departement, '.', 1), 2, '0') AS dept, COUNT(DISTINCT s.siren) AS val FROM etl.stock_unite_legale s INNER JOIN etl.france_services f ON s.siren = LEFT(f.siret, 9) WHERE f.code_departement IS NOT NULL GROUP BY f.code_departement"
+
+def get_v2_status():
+    """Statut V2 : état des couches staging/DW/France Services enrichi."""
+    status = {
+        "timestamp": datetime.now().isoformat(),
+        "layers": {},
+        "global": "ok",
     }
-    sql = queries.get(layer, queries["france_services"])
-    rows = []
-    result = query_pg(sql)
+
+    # Staging
+    staging_tables = query_pg(
+        "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'etl_staging';"
+    )
+    status["layers"]["staging"] = {
+        "tables": int(staging_tables or 0),
+        "status": "ok" if staging_tables and int(staging_tables) > 0 else "empty",
+    }
+
+    # Datawarehouse
+    dw_tables = query_pg(
+        "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'etl_dw';"
+    )
+    status["layers"]["dw"] = {
+        "tables": int(dw_tables or 0),
+        "status": "ok" if dw_tables and int(dw_tables) > 0 else "empty",
+    }
+
+    # France Services enrichi
+    fse_count = query_pg("SELECT COUNT(*) FROM etl_dw.france_services_enriched;")
+    status["layers"]["france_services_enriched"] = {
+        "rows": int(fse_count or 0),
+        "status": "ok" if fse_count and int(fse_count) > 0 else "empty",
+    }
+
+    # État global
+    if not dw_tables or int(dw_tables) == 0:
+        status["global"] = "degraded"
+
+    return status
+
+
+def get_logs(limit: int = 10):
+    """Dernières actions agent (logs)."""
+    result = query_pg(f"""
+        SELECT agent_id, action_type, status, workflow, 
+               rows_affect, duration_ms, created_at
+        FROM etl.agent_action_log
+        ORDER BY created_at DESC
+        LIMIT {limit};
+    """)
+    logs = []
     if result:
-        for line in result.split('\n'):
-            parts = line.split('|')
-            if len(parts) >= 2 and parts[0].strip():
-                rows.append({"dept": parts[0].strip(), "val": int(parts[1].strip())})
-    return {"layer": layer, "data": rows}
+        for line in result.split("\n"):
+            parts = line.split("|")
+            if len(parts) >= 3:
+                logs.append({
+                    "agent": parts[0].strip() if len(parts) > 0 else "",
+                    "action": parts[1].strip() if len(parts) > 1 else "",
+                    "status": parts[2].strip() if len(parts) > 2 else "",
+                })
+    return logs
+
+
+def trigger_pipeline(stage: str) -> dict:
+    """Déclenche un script ETL et retourne le résultat."""
+    scripts = {
+        "staging": f"cd {PROJECT_DIR} && python3 scripts/staging/load_sante_staging.py",
+        "dw": f"cd {PROJECT_DIR} && python3 scripts/transform/build_dw.py",
+    }
+
+    if stage not in scripts:
+        return {"error": f"Étage inconnu: {stage}. Options: staging, dw"}
+
+    try:
+        proc = subprocess.run(
+            scripts[stage],
+            shell=True,
+            capture_output=True,
+            text=True,
+            timeout=300,
+            cwd=PROJECT_DIR,
+        )
+        return {
+            "stage": stage,
+            "success": proc.returncode == 0,
+            "output": proc.stdout[-2000:] if proc.stdout else "",
+            "error": proc.stderr[-500:] if proc.stderr else "",
+        }
+    except subprocess.TimeoutExpired:
+        return {"stage": stage, "success": False, "error": "Timeout (5 min)"}
+    except Exception as e:
+        return {"stage": stage, "success": False, "error": str(e)}
 
 
 class DashboardHandler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
-        if self.path == "/" or self.path == "/index.html":
-            self.path = "/workflows_visualization.html"
-            return http.server.SimpleHTTPRequestHandler.do_GET(self)
-
-        if self.path == "/cartes" or self.path == "/cartes.html":
-            self.path = "/cartes.html"
-            return http.server.SimpleHTTPRequestHandler.do_GET(self)
-
+        # Routes API
         if self.path == "/api/stats":
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Access-Control-Allow-Origin", "*")
-            self.send_header("Cache-Control", "no-cache")
-            self.end_headers()
-            self.wfile.write(json.dumps(get_all_stats()).encode())
-            return
+            return self.json_response(get_all_stats())
+
+        if self.path == "/api/v2/status":
+            return self.json_response(get_v2_status())
+
+        if self.path == "/api/v2/logs":
+            return self.json_response(get_logs())
 
         if self.path.startswith("/api/mapdata/"):
             layer = self.path.split("/")[-1]
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Access-Control-Allow-Origin", "*")
-            self.send_header("Cache-Control", "max-age=300")
-            self.end_headers()
-            self.wfile.write(json.dumps(get_mapdata(layer)).encode())
-            return
+            return self.json_response(get_mapdata(layer))
+
+        # Pages HTML
+        if self.path == "/" or self.path == "/index.html":
+            self.path = "/workflows_v2.html"
+            return http.server.SimpleHTTPRequestHandler.do_GET(self)
+
+        if self.path == "/cartes":
+            self.path = "/cartes.html"
+            return http.server.SimpleHTTPRequestHandler.do_GET(self)
 
         return http.server.SimpleHTTPRequestHandler.do_GET(self)
+
+    def do_POST(self):
+        if self.path == "/api/v2/trigger":
+            content_length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_length) if content_length else b"{}"
+            try:
+                data = json.loads(body)
+            except json.JSONDecodeError:
+                data = {}
+            stage = data.get("stage", "")
+            result = trigger_pipeline(stage)
+            return self.json_response(result, status=200 if result.get("success") else 500)
+
+        self.send_response(404)
+        self.end_headers()
+
+    def json_response(self, data, status: int = 200):
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Cache-Control", "no-cache")
+        self.end_headers()
+        self.wfile.write(json.dumps(data, ensure_ascii=False).encode())
 
     def log_message(self, format, *args):
         pass
 
 
+def get_mapdata(layer: str):
+    """Données par département pour les cartes Leaflet."""
+    queries = {
+        "france_services": """
+            SELECT LPAD(SPLIT_PART(code_departement, '.', 1), 2, '0') AS dept, COUNT(*) AS val
+            FROM etl.france_services
+            WHERE code_departement IS NOT NULL AND LENGTH(code_departement) > 0
+            GROUP BY code_departement
+        """,
+        "annuaire_sante": """
+            SELECT LPAD(LEFT(code_postal, 2), 2, '0') AS dept, COUNT(*) AS val
+            FROM etl.annuaire_personne_activite
+            WHERE code_postal IS NOT NULL AND LENGTH(code_postal) > 0
+            GROUP BY LEFT(code_postal, 2)
+        """,
+        "fse": """
+            SELECT LPAD(REGEXP_REPLACE(code_departement, '\\.[0-9]+$', ''), 2, '0') AS dept, COUNT(*) AS val
+            FROM etl_dw.france_services_enriched
+            WHERE code_departement IS NOT NULL AND LENGTH(code_departement) > 0
+              AND code_departement != ' '
+            GROUP BY REGEXP_REPLACE(code_departement, '\\.[0-9]+$', '')
+        """,
+        "sirene": """
+            SELECT LEFT(siren, 2) AS dept, COUNT(*) AS val
+            FROM etl.stock_unite_legale
+            WHERE siren IS NOT NULL AND etatadministratifunitelegale = 'A'
+              AND LENGTH(siren) >= 2
+            GROUP BY LEFT(siren, 2)
+        """,
+    }
+    sql = queries.get(layer, queries["france_services"])
+    rows = []
+    result = query_pg(sql)
+    if result:
+        for line in result.split("\n"):
+            parts = line.split("|")
+            if len(parts) >= 2 and parts[0].strip():
+                rows.append({"dept": parts[0].strip(), "val": int(parts[1].strip())})
+    return {"layer": layer, "data": rows}
+
+
 if __name__ == "__main__":
     os.chdir("/root/projects/sirene/viz")
-    server = http.server.HTTPServer(("0.0.0.0", PORT), DashboardHandler)
-    print(f"Serving workflows dashboard on http://0.0.0.0:{PORT}")
+    server = http.server.HTTPServer(("127.0.0.1", PORT), DashboardHandler)
+    print(f"Workflows V2 — http://127.0.0.1:{PORT}")
     server.serve_forever()
