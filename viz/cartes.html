@@ -8,57 +8,156 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
   *{margin:0;padding:0;box-sizing:border-box}
-  body{font-family:Inter,sans-serif;background:#0b1120;color:#e2e8f0;display:flex;flex-direction:column;height:100vh}
-  header{background:#0f172a;border-bottom:1px solid #1e293b;padding:16px 24px;display:flex;align-items:center;gap:16px;z-index:1000}
+  body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0b1120;color:#e2e8f0;display:flex;flex-direction:column;height:100vh}
+
+  /* Header */
+  header{background:#0f172a;border-bottom:1px solid #1e293b;padding:16px 24px;display:flex;align-items:center;gap:16px;z-index:1000;flex-shrink:0}
   header h1{font-size:1.2rem;font-weight:700;background:linear-gradient(135deg,#60a5fa,#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-  header a{color:#64748b;text-decoration:none;font-size:.85rem;margin-left:auto}
-  header a:hover{color:#94a3b8}
-  #map{flex:1;cursor:grab}
-  .panel{position:absolute;top:80px;right:16px;z-index:999;background:#0f172a;border:1px solid #1e293b;border-radius:12px;padding:16px;min-width:260px;box-shadow:0 8px 32px rgba(0,0,0,.4)}
-  .panel h3{font-size:.85rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px}
-  .panel button{display:block;width:100%;padding:8px 14px;margin-bottom:4px;background:transparent;border:1px solid #1e293b;border-radius:8px;color:#94a3b8;cursor:pointer;font-size:.82rem;text-align:left;transition:all .2s;font-family:inherit}
-  .panel button:hover,.panel button.active{background:#1e3a5f;color:#60a5fa;border-color:#3b82f6}
-  .legend{position:absolute;bottom:24px;left:16px;z-index:999;background:#0f172a;border:1px solid #1e293b;border-radius:10px;padding:12px 16px;font-size:.75rem}
-  .legend .bar{height:10px;border-radius:5px;margin:4px 0 8px}
-  .legend .labels{display:flex;justify-content:space-between;color:#64748b}
-  .info-panel{position:absolute;top:80px;left:16px;z-index:999;background:#0f172a;border:1px solid #1e293b;border-radius:10px;padding:12px 16px;font-size:.8rem;color:#94a3b8;pointer-events:none}
-  .info-panel strong{color:#f1f5f9}
+  header nav{display:flex;align-items:center;gap:8px;margin-left:auto}
+  header a{color:#64748b;text-decoration:none;font-size:.85rem;padding:6px 12px;border-radius:6px;transition:all .2s}
+  header a:hover{color:#e2e8f0;background:#1e293b}
+
+  /* Layout conteneur */
+  .map-wrapper{flex:1;position:relative;overflow:hidden}
+
+  /* Carte */
+  #map{width:100%;height:100%;cursor:grab}
+
+  /* Panneau de contrôle (couches) */
+  .layer-panel{position:absolute;top:16px;right:16px;z-index:999;background:#0f172a;border:1px solid #1e293b;border-radius:12px;padding:16px;min-width:240px;box-shadow:0 8px 32px rgba(0,0,0,.5)}
+  .layer-panel h3{font-size:.8rem;color:#64748b;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px}
+  .layer-panel button{display:block;width:100%;padding:9px 14px;margin-bottom:5px;background:transparent;border:1px solid #1e293b;border-radius:8px;color:#94a3b8;cursor:pointer;font-size:.82rem;text-align:left;transition:all .2s;font-family:inherit}
+  .layer-panel button:hover{background:#1e3a5f;color:#cbd5e1;border-color:#334155}
+  .layer-panel button.active{background:#1e3a5f;color:#60a5fa;border-color:#3b82f6;font-weight:600}
+
+  /* Panneau de détail (cliqué) — centré en bas */
+  .detail-panel{position:absolute;bottom:24px;left:50%;transform:translateX(-50%);z-index:999;background:#0f172a;border:1px solid #334155;border-radius:14px;padding:18px 24px;min-width:340px;max-width:500px;box-shadow:0 12px 40px rgba(0,0,0,.6);display:none;animation:fadeUp .3s ease}
+  .detail-panel.visible{display:block}
+  .detail-panel .close-btn{position:absolute;top:8px;right:12px;background:none;border:none;color:#64748b;cursor:pointer;font-size:1.2rem;padding:4px;line-height:1}
+  .detail-panel .close-btn:hover{color:#f87171}
+  .detail-panel .dept-name{font-size:1.3rem;font-weight:700;color:#f1f5f9;margin-bottom:4px}
+  .detail-panel .dept-code{font-size:.8rem;color:#64748b;text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px}
+  .detail-panel .stat-row{display:flex;justify-content:space-between;align-items:baseline;padding:8px 0;border-bottom:1px solid #1e293b;font-size:.85rem}
+  .detail-panel .stat-row:last-child{border-bottom:none}
+  .detail-panel .stat-label{color:#94a3b8}
+  .detail-panel .stat-value{font-weight:700;color:#f1f5f9;font-size:1.1rem}
+  .detail-panel .stat-bar{height:4px;border-radius:2px;margin-top:4px;background:#1e293b}
+  .detail-panel .stat-bar-fill{height:100%;border-radius:2px;transition:width .4s ease}
+
+  /* Info-bulle survol (transitoire) — plus visible */
+  .hover-tooltip{position:absolute;pointer-events:none;z-index:1000;background:#0f172a;border:1px solid #60a5fa;border-radius:8px;padding:8px 14px;font-size:.82rem;color:#e2e8f0;box-shadow:0 4px 16px rgba(0,0,0,.5);display:none;white-space:nowrap}
+  .hover-tooltip strong{color:#60a5fa}
+
+  /* Légende */
+  .legend{position:absolute;bottom:24px;right:16px;z-index:999;background:#0f172a;border:1px solid #1e293b;border-radius:10px;padding:12px 16px;font-size:.75rem;min-width:180px}
+  .legend h4{font-size:.72rem;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px}
+  .legend .gradient-bar{height:10px;border-radius:5px;margin:6px 0;background:linear-gradient(90deg,#0b2e59,#115999,#1577c4,#1a95ef,#5eb3f4,#a3d1f9,#c5e0fc)}
+  .legend .range{display:flex;justify-content:space-between;color:#64748b;font-size:.7rem}
+
+  /* Label permanent sur les départements */
+  .dept-label{background:none!important;border:none!important;box-shadow:none!important;font-weight:700;font-size:11px;color:#e2e8f0;text-shadow:0 1px 4px rgba(0,0,0,.8),0 0 8px rgba(0,0,0,.6);pointer-events:none}
+
+  /* Tooltip au survol Leaflet (non permanent) */
+  .leaflet-tooltip.dept-hover{background:#0f172a;border:1px solid #60a5fa;border-radius:6px;color:#e2e8f0;padding:6px 10px;font-size:.8rem;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+
+  /* Popup détaillé Leaflet — non utilisé, on préfère le panneau */
+  .leaflet-popup-content-wrapper{background:#0f172a;color:#e2e8f0;border-radius:10px;border:1px solid #1e293b}
+
+  @keyframes fadeUp{from{opacity:0;transform:translateX(-50%) translateY(12px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+
+  /* Responsive */
+  @media(max-width:768px){
+    .layer-panel{top:auto;bottom:16px;right:8px;min-width:200px;padding:12px}
+    .detail-panel{bottom:80px;left:8px;right:8px;transform:none;min-width:auto;max-width:none}
+    .detail-panel.visible{transform:none}
+    .legend{bottom:80px;right:8px}
+  }
 </style>
 </head>
 <body>
 
 <header>
   <h1>🗺️ Cartes — Référentiel National</h1>
-  <a href="/">← Workflows</a>
+  <nav>
+    <a href="/">← Workflows</a>
+  </nav>
 </header>
 
-<div id="map"></div>
+<div class="map-wrapper">
+  <div id="map"></div>
 
-<div class="panel">
-  <h3>Couche de données</h3>
-  <button class="active" data-layer="france_services">🏛️ France Services</button>
-  <button data-layer="fse">⭐ France Services Enrichi</button>
-  <button data-layer="annuaire_sante">🩺 Annuaire Santé</button>
+  <!-- Panneau des couches -->
+  <div class="layer-panel">
+    <h3>📊 Couche de données</h3>
+    <button class="active" data-layer="france_services">🏛️ France Services</button>
+    <button data-layer="fse">⭐ France Services Enrichi</button>
+    <button data-layer="annuaire_sante">🩺 Annuaire Santé</button>
+    <button data-layer="sirene">🏢 SIRENE (unités actives)</button>
+  </div>
+
+  <!-- Panneau de détail (au clic) -->
+  <div class="detail-panel" id="detailPanel">
+    <button class="close-btn" onclick="closeDetail()">✕</button>
+    <div class="dept-name" id="detailName">—</div>
+    <div class="dept-code" id="detailCode">Département —</div>
+    <div class="stat-row">
+      <span class="stat-label" id="detailLayerLabel">—</span>
+      <span class="stat-value" id="detailValue">—</span>
+    </div>
+    <div class="stat-bar"><div class="stat-bar-fill" id="detailBar" style="width:0%;background:#60a5fa"></div></div>
+    <div class="stat-row" style="margin-top:8px">
+      <span class="stat-label">Part du total national</span>
+      <span class="stat-value" id="detailPct" style="font-size:.9rem">—</span>
+    </div>
+  </div>
+
+  <!-- Légende -->
+  <div class="legend">
+    <h4>Intensité</h4>
+    <div class="gradient-bar"></div>
+    <div class="range">
+      <span id="legendMin">0</span>
+      <span id="legendMax">—</span>
+    </div>
+  </div>
+
+  <!-- Tooltip de survol -->
+  <div class="hover-tooltip" id="hoverTooltip"></div>
 </div>
 
-<div class="info-panel" id="info">Survolez un département</div>
-
 <script>
-const map = L.map('map').setView([46.8, 2.3], 6);
+const map = L.map('map', {
+  center: [46.8, 2.3],
+  zoom: 6,
+  zoomControl: true,
+  scrollWheelZoom: true,
+  // Limiter le zoom pour éviter de perdre le contexte France
+  minZoom: 5,
+  maxZoom: 9
+});
+
+// Fond de carte sombre
 L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-  attribution: '&copy; OpenStreetMap, CARTO',
+  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>, CARTO',
   maxZoom: 10
 }).addTo(map);
 
 let geoJsonLayer = null;
 let currentData = {};
+let currentLayerName = 'france_services';
+let totalNational = 0;
 
-const colors = ['#0b2e59','#0d3b6e','#0f4a84','#115999','#1368af','#1577c4','#1786da','#1a95ef','#3ca4f2','#5eb3f4','#80c2f7','#a3d1f9','#c5e0fc'];
+// Palette de couleurs — du foncé au clair
+const colors = [
+  '#0b2e59','#0d3b6e','#0f4a84','#115999','#1368af',
+  '#1577c4','#1786da','#1a95ef','#3ca4f2','#5eb3f4',
+  '#80c2f7','#a3d1f9','#c5e0fc'
+];
 
 function getColor(val, max) {
   if (!val || max === 0) return '#1e293b';
-  const ratio = val / max;
-  const idx = Math.min(Math.floor(ratio * colors.length), colors.length - 1);
+  const ratio = Math.min(val / max, 1);
+  const idx = Math.floor(ratio * (colors.length - 1));
   return colors[idx];
 }
 
@@ -71,46 +170,166 @@ function styleFeature(feature) {
     weight: 1,
     opacity: 1,
     color: '#1e293b',
-    fillOpacity: val > 0 ? 0.85 : 0.15
+    fillOpacity: val > 0 ? 0.85 : 0.12
   };
 }
 
-function highlightFeature(e) {
-  const layer = e.target;
-  layer.setStyle({ weight: 2, color: '#60a5fa' });
-  layer.bringToFront();
-  const code = layer.feature.properties.code;
-  const nom = layer.feature.properties.nom;
+let prevSelected = null;
+let selectedCode = null;
+
+// === Panneau de détail ===
+
+function showDetail(feature) {
+  const code = feature.properties.code;
+  const nom = feature.properties.nom;
   const val = currentData[code] || 0;
-  document.getElementById('info').innerHTML = `<strong>${nom} (${code})</strong><br>${val.toLocaleString('fr-FR')}`;
+  const maxVal = Math.max(1, ...Object.values(currentData));
+  const pct = maxVal > 0 ? ((val / totalNational) * 100) : 0;
+
+  document.getElementById('detailName').textContent = nom;
+  document.getElementById('detailCode').textContent = `Département ${code}`;
+  document.getElementById('detailLayerLabel').textContent = getLayerLabel(currentLayerName);
+  document.getElementById('detailValue').textContent = val.toLocaleString('fr-FR');
+  document.getElementById('detailBar').style.width = maxVal > 0 ? ((val / maxVal) * 100) + '%' : '0%';
+  document.getElementById('detailPct').textContent = pct.toFixed(2) + ' %';
+
+  const panel = document.getElementById('detailPanel');
+  panel.classList.add('visible');
 }
 
-function resetHighlight(e) {
-  geoJsonLayer && geoJsonLayer.resetStyle(e.target);
-  document.getElementById('info').innerHTML = 'Survolez un département';
-}
-
-function onEachFeature(feature, layer) {
-  layer.on({ mouseover: highlightFeature, mouseout: resetHighlight });
-}
-
-async function loadLayer(layerName) {
-  document.querySelectorAll('.panel button').forEach(b => b.classList.remove('active'));
-  document.querySelector(`[data-layer="${layerName}"]`).classList.add('active');
-
-  const resp = await fetch(`/api/mapdata/${layerName}`);
-  const json = await resp.json();
-  currentData = {};
-  json.data.forEach(d => { currentData[d.dept] = d.val; });
-
-  if (geoJsonLayer) {
-    geoJsonLayer.setStyle(styleFeature);
+function closeDetail() {
+  document.getElementById('detailPanel').classList.remove('visible');
+  if (geoJsonLayer && prevSelected) {
+    geoJsonLayer.resetStyle(prevSelected);
+    prevSelected = null;
+    selectedCode = null;
   }
 }
 
+function getLayerLabel(name) {
+  const labels = {
+    'france_services': '🏛️ France Services',
+    'fse': '⭐ France Services Enrichi',
+    'annuaire_sante': '🩺 Annuaire Santé',
+    'sirene': '🏢 SIRENE (unités actives)'
+  };
+  return labels[name] || name;
+}
+
+// === Chargement des couches ===
+
+async function loadLayer(layerName) {
+  // Boutons
+  document.querySelectorAll('.layer-panel button').forEach(b => b.classList.remove('active'));
+  const btn = document.querySelector(`[data-layer="${layerName}"]`);
+  if (btn) btn.classList.add('active');
+  currentLayerName = layerName;
+
+  // Données
+  const resp = await fetch(`/api/mapdata/${layerName}`);
+  const json = await resp.json();
+  currentData = {};
+  totalNational = 0;
+  json.data.forEach(d => {
+    const dept = d.dept;
+    currentData[dept] = d.val;
+    totalNational += d.val;
+  });
+
+  // Mise à jour du style + gestionnaire de clic sur fond de carte
+  if (geoJsonLayer) {
+    geoJsonLayer.setStyle(styleFeature);
+  }
+
+  // Fermer le détail si ouvert
+  closeDetail();
+
+  // Mise à jour légende
+  const maxVal = Math.max(1, ...Object.values(currentData));
+  document.getElementById('legendMax').textContent = maxVal.toLocaleString('fr-FR');
+  document.getElementById('legendMin').textContent = '0';
+}
+
+// === Initialisation ===
+function setupFeatureInteraction(feature, layer) {
+  const code = feature.properties.code;
+  const nom = feature.properties.nom;
+
+  // Label permanent uniquement
+  layer.bindTooltip(code, {
+    permanent: true,
+    direction: 'center',
+    className: 'dept-label'
+  });
+
+  // Survol → highlight + custom tooltip HTML
+  layer.on('mouseover', function(e) {
+    const l = e.target;
+    const val = currentData[l.feature.properties.code] || 0;
+    l.setStyle({ weight: 2, color: '#60a5fa', fillOpacity: 0.95 });
+    l.bringToFront();
+
+    // Tooltip custom
+    const tip = document.getElementById('hoverTooltip');
+    tip.innerHTML = `<strong>${l.feature.properties.nom}</strong> (${l.feature.properties.code}) — ${val.toLocaleString('fr-FR')}`;
+    tip.style.display = 'block';
+  });
+
+  layer.on('mousemove', function(e) {
+    const tip = document.getElementById('hoverTooltip');
+    const mapRect = map.getContainer().getBoundingClientRect();
+    tip.style.left = (e.originalEvent.clientX - mapRect.left + 18) + 'px';
+    tip.style.top = (e.originalEvent.clientY - mapRect.top - 40) + 'px';
+  });
+
+  layer.on('mouseout', function(e) {
+    document.getElementById('hoverTooltip').style.display = 'none';
+    if (geoJsonLayer && e.target.feature.properties.code !== selectedCode) {
+      geoJsonLayer.resetStyle(e.target);
+    }
+  });
+
+  // Clic → détail
+  layer.on('click', function(e) {
+    showDetail(e.target.feature);
+    if (geoJsonLayer && prevSelected) {
+      geoJsonLayer.resetStyle(prevSelected);
+    }
+    const l = e.target;
+    l.setStyle({ weight: 3, color: '#f59e0b', fillOpacity: 0.95 });
+    l.bringToFront();
+    prevSelected = l;
+    selectedCode = l.feature.properties.code;
+  });
+}
+
+// === Initialisation ===
+
 // Event listeners pour les boutons
-document.querySelectorAll('.panel button').forEach(btn => {
+document.querySelectorAll('.layer-panel button').forEach(btn => {
   btn.addEventListener('click', () => loadLayer(btn.dataset.layer));
+});
+
+// Clic sur la carte (hors département) → fermer le détail
+map.on('click', function(e) {
+  // Si on clique sur le fond de carte (pas un département), fermer
+  // Mais Leaflet propage les événements, le clic sur un layer est traité avant
+  setTimeout(() => {
+    // Vérifier si le clic était sur un département
+    const px = map.latLngToContainerPoint(e.latlng);
+    const el = document.elementFromPoint(
+      map.getContainer().getBoundingClientRect().left + px.x,
+      map.getContainer().getBoundingClientRect().top + px.y
+    );
+    if (!el || (!el.closest('.leaflet-interactive') && !el.closest('.detail-panel'))) {
+      closeDetail();
+    }
+  }, 50);
+});
+
+// Fermer avec Échap
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeDetail();
 });
 
 // Charger le GeoJSON France départements
@@ -119,7 +338,7 @@ fetch('/departements.geojson')
   .then(geojson => {
     geoJsonLayer = L.geoJson(geojson, {
       style: styleFeature,
-      onEachFeature: onEachFeature
+      onEachFeature: setupFeatureInteraction
     }).addTo(map);
     map.fitBounds(geoJsonLayer.getBounds());
     loadLayer('france_services');
